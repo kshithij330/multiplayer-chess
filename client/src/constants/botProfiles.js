@@ -1,0 +1,51 @@
+// client/src/constants/botProfiles.js
+export const BOT_PROFILES = {
+  1: {
+    id: "bot_1",
+    name: "Some Bad Chess Player",
+    elo: 250,
+    avatar: "🤡",
+    description: "A well-meaning player who forgets which pieces do what.",
+    catchphrase: "I think... this is a good move?",
+  },
+  2: {
+    id: "bot_2",
+    name: "The Beginner",
+    elo: 500,
+    avatar: "🎓",
+    description: "Learning the ropes but still very rough around the edges.",
+    catchphrase: "Oh wait, can I take that?",
+  },
+  3: {
+    id: "bot_3",
+    name: "Club Casual",
+    elo: 1000,
+    avatar: "♟️",
+    description: "Plays at the local chess club. Knows the basics.",
+    catchphrase: "Center control, right?",
+  },
+  4: {
+    id: "bot_4",
+    name: "The Intermediate",
+    elo: 1500,
+    avatar: "🏆",
+    description: "A solid player who knows their openings.",
+    catchphrase: "I've prepared for this line.",
+  },
+  5: {
+    id: "bot_5",
+    name: "Expert Bot",
+    elo: 2000,
+    avatar: "⚔️",
+    description: "A strong expert who rarely makes mistakes.",
+    catchphrase: "Your position is strategically lost.",
+  },
+  6: {
+    id: "bot_6",
+    name: "Magnus Carlsen",
+    elo: 2500,
+    avatar: "👑",
+    description: "The world chess champion. Good luck.",
+    catchphrase: "I see everything.",
+  },
+};
