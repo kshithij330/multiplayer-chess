@@ -221,7 +221,7 @@ export default function ChessBoard({ onMove }) {
   };
 
   return (
-    <div className="w-full max-w-[560px] mx-auto select-none touch-none">
+    <div className="w-full max-w-[720px] mx-auto select-none touch-none">
       <div className="relative w-full aspect-square rounded-lg overflow-hidden shadow-2xl border-4 border-[#262421]">
         <div className="w-full h-full grid grid-cols-8 grid-rows-8 bg-gray-800">
           {renderGrid()}

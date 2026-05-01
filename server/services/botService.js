@@ -53,43 +53,6 @@ function getOpeningBookMove(fen, difficulty) {
   return moves[0].move;
 }
 
-async function callGroqAI(fen, legalMovesUCI, difficulty) {
-  const profile = BOT_PROFILES[difficulty] || BOT_PROFILES[3];
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return null;
-
-  const systemPrompt = `You are playing chess. You MUST respond with ONLY a valid JSON object.
-No explanation, no prose.
-JSON format: {"from": "e2", "to": "e4", "promotion": null}
-Legal moves for this position: ${legalMovesUCI.join(", ")}`;
-
-  try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json", 
-        "Authorization": `Bearer ${apiKey}` 
-      },
-      body: JSON.stringify({
-        model: profile.model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `FEN: ${fen}` }
-        ],
-        response_format: { type: "json_object" }, // FORCE JSON MODE
-        temperature: 0.1
-      })
-    });
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
-  } catch (err) {
-    console.error("[Bot] Groq error:", err);
-    return null;
-  }
-}
-
 async function getBotMove(game, difficulty) {
   const fen = game.fen();
   
@@ -99,26 +62,19 @@ async function getBotMove(game, difficulty) {
     const from = bookMove.slice(0, 2);
     const to = bookMove.slice(2, 4);
     const promotion = bookMove.length > 4 ? bookMove[4] : 'q';
-    return game.move({ from, to, promotion });
+    return { from, to, promotion };
   }
 
-  // 2. Try AI Personality (Optional/Hybrid)
-  // If we have an API key, we can try to use it for a more "human" move if depth is low
-  // But for now, let's use the ENGINE as the primary source of truth for stability.
-  
-  // 3. Use local engine (js-chess-engine)
+  // 2. Use local engine (js-chess-engine)
   try {
     const profile = BOT_PROFILES[difficulty] || BOT_PROFILES[3];
     const engine = new Game(fen);
     const moveMap = engine.aiMove(profile.engineLevel);
     
-    const from = Object.keys(moveMap)[0].toLowerCase();
-    const to = moveMap[Object.keys(moveMap)[0]].toLowerCase();
-    
-    const move = game.move({ from, to, promotion: 'q' });
-    if (move) {
-      game.undo();
-      return move;
+    if (moveMap && Object.keys(moveMap).length > 0) {
+      const from = Object.keys(moveMap)[0].toLowerCase();
+      const to = moveMap[Object.keys(moveMap)[0]].toLowerCase();
+      return { from, to, promotion: 'q' };
     }
   } catch (err) {
     console.error("[Bot] Engine failed:", err);
@@ -126,7 +82,9 @@ async function getBotMove(game, difficulty) {
 
   // Fallback to random
   const legalMoves = game.moves({ verbose: true });
-  return legalMoves[Math.floor(Math.random() * legalMoves.length)];
+  if (legalMoves.length === 0) return null;
+  const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+  return { from: randomMove.from, to: randomMove.to, promotion: randomMove.promotion || 'q' };
 }
 
 module.exports = { getBotMove, getThinkDelay, BOT_PROFILES };

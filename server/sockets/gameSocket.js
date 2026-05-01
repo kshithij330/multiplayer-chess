@@ -89,7 +89,7 @@ module.exports = function (io) {
     });
 
     // ── Game Move Events ──
-    socket.on("game:move", async ({ lobbyId, from, to, promotion }) => {
+    socket.on("game:move", async ({ lobbyId, from, to, promotion, clientHandlesBot }) => {
       const gameData = getGame(lobbyId);
       const game = chessInstances.get(lobbyId);
       if (!gameData || !game) return socket.emit("error", { code: "GAME_NOT_FOUND", message: "Game not found" });
@@ -134,10 +134,14 @@ module.exports = function (io) {
         return;
       }
 
-      // If bot game, trigger bot move
-      if (gameData.isBotGame) {
+      // If bot game, trigger bot move (unless client handles it)
+      if (gameData.isBotGame && !clientHandlesBot) {
         triggerBotMove(io, lobbyId, game, gameData);
       }
+    });
+
+    socket.on("game:bot_thinking", ({ lobbyId }) => {
+      io.to(lobbyId).emit("game:bot_thinking", {});
     });
 
     // ── Resign ──
@@ -233,16 +237,13 @@ module.exports = function (io) {
     setTimeout(async () => {
       try {
         const botMoveObj = await getBotMove(game, gameData.botDifficulty);
-        // Apply the move to the actual game instance
-        const move = game.move(botMoveObj);
+        if (!botMoveObj) throw new Error("Bot returned no move");
+
+        // Apply the move to the actual game instance using {from, to, promotion}
+        let move = game.move({ from: botMoveObj.from, to: botMoveObj.to, promotion: botMoveObj.promotion || "q" });
+        
         if (!move) {
-          // Fallback: try applying as {from, to}
-          const fallback = game.move({ from: botMoveObj.from, to: botMoveObj.to, promotion: botMoveObj.promotion || "q" });
-          if (!fallback) {
-            console.error("Bot move failed completely. Picking random.");
-            const legal = game.moves({ verbose: true });
-            if (legal.length > 0) game.move(legal[Math.floor(Math.random() * legal.length)]);
-          }
+          throw new Error(`Move invalid: ${botMoveObj.from}-${botMoveObj.to}`);
         }
 
         const appliedMove = game.history({ verbose: true }).slice(-1)[0];
@@ -272,14 +273,46 @@ module.exports = function (io) {
           io.to(lobbyId).emit("game:over", { ...gameOverResult, pgn: game.pgn(), finalFen: game.fen() });
         }
       } catch (err) {
-        console.error("Bot move error:", err);
-        // Emergency fallback
+        console.error("Bot move error or engine crash:", err);
+        // Emergency fallback: If the engine crashes, pick a random legal move
         const legal = game.moves({ verbose: true });
         if (legal.length > 0) {
           const emergencyMove = legal[Math.floor(Math.random() * legal.length)];
           game.move(emergencyMove);
+          
           gameData.fen = game.fen();
-          io.to(lobbyId).emit("game:bot_move", { move: emergencyMove, fen: game.fen(), timers: gameData.timers });
+          gameData.pgn = game.pgn();
+          gameData.moveHistory.push(emergencyMove);
+          
+          const botTurn = game.turn() === "w" ? "b" : "w";
+          onMoveComplete(gameData, botTurn);
+          
+          const isCheck = game.isCheck();
+          const gameOverResult = checkGameOver(game);
+
+          io.to(lobbyId).emit("game:bot_move", { 
+            move: emergencyMove, fen: game.fen(), timers: gameData.timers,
+            isCheck, isCheckmate: gameOverResult.over && gameOverResult.reason === "checkmate",
+            isDraw: gameOverResult.over && !gameOverResult.winner,
+          });
+
+          if (isCheck && !gameOverResult.over) {
+            io.to(lobbyId).emit("game:check", { checkedColor: game.turn(), fen: game.fen() });
+          }
+
+          if (gameOverResult.over) {
+            stopTimers(gameData);
+            updateGame(lobbyId, { result: gameOverResult, endedAt: new Date().toISOString() });
+            io.to(lobbyId).emit("game:over", { ...gameOverResult, pgn: game.pgn(), finalFen: game.fen() });
+          }
+        } else {
+          // It was actually checkmate or stalemate
+          const gameOverResult = checkGameOver(game);
+          if (gameOverResult.over) {
+            stopTimers(gameData);
+            updateGame(lobbyId, { result: gameOverResult, endedAt: new Date().toISOString() });
+            io.to(lobbyId).emit("game:over", { ...gameOverResult, pgn: game.pgn(), finalFen: game.fen() });
+          }
         }
       }
     }, delay);

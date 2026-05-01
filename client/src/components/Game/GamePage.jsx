@@ -9,10 +9,15 @@ import CheckNotification from "./CheckNotification";
 import GameOverModal from "./GameOverModal";
 import useGameStore from "../../store/gameStore";
 import useTimer from "../../hooks/useTimer";
+import useBotEngine from "../../hooks/useBotEngine";
 import { BOT_PROFILES } from "../../constants/botProfiles";
 
 export default function GamePage({ emit }) {
   const navigate = useNavigate();
+  
+  // Initialize Stockfish.js bot engine
+  useBotEngine(emit);
+
   const {
     lobbyId, fen, playerColor, boardOrientation, isGameOver, isBotGame,
     botDifficulty, botThinking, drawOffered, drawOfferedBy, flipBoard,
@@ -94,7 +99,7 @@ export default function GamePage({ emit }) {
 
       <div className="max-w-[1100px] mx-auto flex flex-col lg:flex-row gap-6 items-start">
         {/* Board Section */}
-        <div className="flex-shrink-0">
+        <div className="flex-1 w-full lg:max-w-[520px]">
           {/* Top Player */}
           <PlayerInfo
             color={topColor}
