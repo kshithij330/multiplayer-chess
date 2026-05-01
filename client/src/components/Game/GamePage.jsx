@@ -37,10 +37,16 @@ export default function GamePage({ emit }) {
 
   const handleMove = useCallback(
     (from, to, promotion) => {
-      emit("game:move", { lobbyId, from, to, promotion: promotion || null });
+      emit("game:move", { 
+        lobbyId, 
+        from, 
+        to, 
+        promotion: promotion || null,
+        clientHandlesBot: isBotGame // Tell server to let client handle the bot response
+      });
       return true;
     },
-    [emit, lobbyId]
+    [emit, lobbyId, isBotGame]
   );
 
   const handleResign = () => {

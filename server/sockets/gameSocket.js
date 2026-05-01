@@ -99,7 +99,20 @@ module.exports = function (io) {
       const currentTurn = game.turn();
       const isWhite = socket.id === gameData.whitePlayerId;
       const isBlack = socket.id === gameData.blackPlayerId;
-      if ((currentTurn === "w" && !isWhite) || (currentTurn === "b" && !isBlack)) {
+      
+      // In a bot game, the human player is allowed to submit moves for the bot
+      const isBotTurn = gameData.isBotGame && (
+        (currentTurn === "w" && gameData.whitePlayerId === "bot") ||
+        (currentTurn === "b" && gameData.blackPlayerId === "bot")
+      );
+
+      if (!isWhite && !isBlack && !isBotTurn) {
+        console.log(`[Socket] Unauthorized move attempt by ${socket.id}`);
+        return socket.emit("error", { code: "NOT_YOUR_TURN", message: "It is not your turn" });
+      }
+
+      // If it's the bot's turn but it's not a bot game move from client, block it
+      if (!isBotTurn && ((currentTurn === "w" && !isWhite) || (currentTurn === "b" && !isBlack))) {
         return socket.emit("error", { code: "NOT_YOUR_TURN", message: "It is not your turn" });
       }
 

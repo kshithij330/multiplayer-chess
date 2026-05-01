@@ -34,6 +34,15 @@ const io = new Server(server, {
 
 setupGameSocket(io);
 
+// Global error handlers to prevent process crashes
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("UNHANDLED REJECTION at:", promise, "reason:", reason);
+});
+
 server.listen(PORT, () => {
   console.log(`♟️  Chess server running on http://localhost:${PORT}`);
   console.log(`   Client URL: ${CLIENT_URL}`);
