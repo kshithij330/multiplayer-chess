@@ -18,6 +18,10 @@ export default function ChessBoard({ onMove }) {
   const reviewIndex = useGameStore(s => s.reviewIndex);
   const isCheck = useGameStore(s => s.isCheck);
   const moveHistory = useGameStore(s => s.moveHistory);
+  const hintMove = useGameStore(s => s.hintMove);
+  const premove = useGameStore(s => s.premove);
+  const setPremove = useGameStore(s => s.setPremove);
+  const clearPremove = useGameStore(s => s.clearPremove);
 
   const [moveFrom, setMoveFrom] = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
@@ -59,7 +63,37 @@ export default function ChessBoard({ onMove }) {
   };
 
   const handleSquareClick = useCallback((square) => {
-    if (!isMyTurn || botThinking) return;
+    if (isGameOver || reviewIndex !== null) return;
+
+    // --- If it's NOT my turn, handle Premove ---
+    if (!isMyTurn) {
+      if (moveFrom && moveFrom !== square) {
+        // Attempt to set a premove
+        const piece = game.get(moveFrom);
+        if (piece && piece.color === playerColor) {
+          setPremove({ from: moveFrom, to: square, promotion: 'q' });
+        }
+        setMoveFrom(null);
+        setLegalMoves([]);
+        return;
+      }
+
+      // Select piece for premove
+      const piece = game.get(square);
+      if (piece && piece.color === playerColor) {
+        setMoveFrom(square);
+        const moves = game.moves({ square, verbose: true });
+        setLegalMoves(moves.map(m => m.to));
+      } else {
+        setMoveFrom(null);
+        setLegalMoves([]);
+        clearPremove();
+      }
+      return;
+    }
+
+    // --- If it IS my turn, handle standard move ---
+    if (botThinking) return;
 
     // Execute Move
     if (moveFrom && legalMoves.includes(square)) {
@@ -89,21 +123,24 @@ export default function ChessBoard({ onMove }) {
 
   // Drag and drop handlers
   const handleDragStart = (e, square, piece) => {
-    if (!isMyTurn || botThinking || piece.color !== playerColor) {
+    if (isGameOver || reviewIndex !== null || piece.color !== playerColor) {
       e.preventDefault();
       return;
     }
     setDraggedSquare(square);
-    setMoveFrom(square); // Also select it for visual consistency
+    setMoveFrom(square);
     const moves = game.moves({ square, verbose: true });
     setLegalMoves(moves.map(m => m.to));
-    // Optional: Set ghost image or data
     e.dataTransfer.setData("text/plain", square);
     e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e, square) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault();
+    if (!isMyTurn) {
+      e.dataTransfer.dropEffect = "move";
+      return;
+    }
     if (legalMoves.includes(square)) {
       e.dataTransfer.dropEffect = "move";
     } else {
@@ -116,8 +153,21 @@ export default function ChessBoard({ onMove }) {
     const sourceSquare = e.dataTransfer.getData("text/plain");
     setDraggedSquare(null);
 
-    if (!isMyTurn || botThinking) return;
+    if (isGameOver || reviewIndex !== null) return;
     if (sourceSquare === targetSquare) return;
+
+    if (!isMyTurn) {
+      // Set Premove via drag
+      const piece = game.get(sourceSquare);
+      if (piece && piece.color === playerColor) {
+        setPremove({ from: sourceSquare, to: targetSquare, promotion: 'q' });
+      }
+      setMoveFrom(null);
+      setLegalMoves([]);
+      return;
+    }
+
+    if (botThinking) return;
     if (!legalMoves.includes(targetSquare)) {
       // If dropped on an illegal square, just clear selection
       setMoveFrom(null);
@@ -148,11 +198,15 @@ export default function ChessBoard({ onMove }) {
     const isLastMove = lastMove && (lastMove.from === squareNotation || lastMove.to === squareNotation);
     const isSelected = moveFrom === squareNotation;
     const isLegalMove = legalMoves.includes(squareNotation);
+    const isHintMove = hintMove && (hintMove.from === squareNotation || hintMove.to === squareNotation);
+    const isPremove = premove && (premove.from === squareNotation || premove.to === squareNotation);
     const isKingInCheck = isCheck && piece?.type === 'k' && piece?.color === currentTurn && reviewIndex === null;
 
     let highlightClass = "";
     if (isKingInCheck) highlightClass = "bg-red-500/60 shadow-[inset_0_0_15px_rgba(255,0,0,0.8)] rounded-full m-1";
+    else if (isPremove) highlightClass = "bg-red-500/40 shadow-[inset_0_0_10px_rgba(239,68,68,0.5)]";
     else if (isSelected) highlightClass = "bg-yellow-400/50";
+    else if (isHintMove) highlightClass = "bg-blue-400/50 shadow-[inset_0_0_10px_rgba(59,130,246,0.5)]";
     else if (isLastMove) highlightClass = "bg-yellow-400/30";
 
     return (
@@ -160,6 +214,12 @@ export default function ChessBoard({ onMove }) {
         key={squareNotation}
         className={`relative w-full h-full ${baseColor} flex items-center justify-center`}
         onClick={() => handleSquareClick(squareNotation)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          clearPremove();
+          setMoveFrom(null);
+          setLegalMoves([]);
+        }}
         onDragOver={(e) => handleDragOver(e, squareNotation)}
         onDrop={(e) => handleDrop(e, squareNotation)}
       >

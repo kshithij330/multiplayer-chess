@@ -76,6 +76,8 @@ export function setupSocketListeners() {
   socket.on("game:move", (data) => {
     console.log("[Socket] game:move", data.move?.san);
     const store = useGameStore.getState();
+    store.setBotThinking(false);
+    store.setHintMove(null);
     store.setFen(data.fen);
     if (data.move) store.addMove(data.move);
     if (data.timers) store.setTimers(data.timers);
@@ -112,7 +114,7 @@ export function setupSocketListeners() {
   });
 
   socket.on("error", (err) => {
-    console.error("[Socket] Server error:", err);
+    console.error("[Socket] Server error:", err.code, err.message || err);
   });
 }
 

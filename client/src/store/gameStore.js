@@ -62,8 +62,15 @@ const useGameStore = create((set) => ({
     isBotGame: false, botDifficulty: 3, botThinking: false,
     drawOffered: false, drawOfferedBy: null,
     reviewIndex: null, reviewFen: null,
+    hintMove: null,
+    premove: null,
     timers: { white: { remaining: 300, active: false }, black: { remaining: 300, active: false } },
   }),
+  hintMove: null,
+  setHintMove: (move) => set({ hintMove: move }),
+  premove: null,
+  setPremove: (move) => set({ premove: move }),
+  clearPremove: () => set({ premove: null }),
 }));
 
 export default useGameStore;

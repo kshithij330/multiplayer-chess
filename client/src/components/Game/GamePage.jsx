@@ -1,7 +1,8 @@
 // client/src/components/Game/GamePage.jsx
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Chess } from "chess.js";
 import ChessBoard from "../Board/ChessBoard";
 import MoveHistory from "../Board/MoveHistory";
 import PlayerInfo from "./PlayerInfo";
@@ -11,9 +12,11 @@ import useGameStore from "../../store/gameStore";
 import useTimer from "../../hooks/useTimer";
 import useBotEngine from "../../hooks/useBotEngine";
 import { BOT_PROFILES } from "../../constants/botProfiles";
+import { stockfish } from "../../services/stockfishService";
 
 export default function GamePage({ emit }) {
   const navigate = useNavigate();
+  const [isGettingHint, setIsGettingHint] = useState(false);
   
   // Initialize Stockfish.js bot engine
   useBotEngine(emit);
@@ -21,12 +24,13 @@ export default function GamePage({ emit }) {
   const {
     lobbyId, fen, playerColor, boardOrientation, isGameOver, isBotGame,
     botDifficulty, botThinking, drawOffered, drawOfferedBy, flipBoard,
-    resetGame, clearGameOver,
+    resetGame, clearGameOver, hintMove, setHintMove,
+    premove, clearPremove
   } = useGameStore();
 
   const timer = useTimer();
   const currentTurn = fen.split(" ")[1];
-
+  
   // Determine which player info is on top/bottom based on board orientation
   const isWhiteBottom = boardOrientation === "white";
   const topColor = isWhiteBottom ? "b" : "w";
@@ -35,8 +39,24 @@ export default function GamePage({ emit }) {
   const isTopBot = isBotGame && topColor !== playerColor;
   const isBottomBot = isBotGame && bottomColor !== playerColor;
 
+  const isMyTurn = currentTurn === playerColor && !isGameOver;
+
+  const handleGetHint = async () => {
+    if (!isMyTurn || isGettingHint) return;
+    setIsGettingHint(true);
+    setHintMove(null); // Clear old hint
+    
+    // Find best move at high level for accurate hint
+    stockfish.findMove(fen, 6, (move) => {
+      setHintMove(move);
+      setIsGettingHint(false);
+    });
+  };
+
   const handleMove = useCallback(
     (from, to, promotion) => {
+      setHintMove(null); // Clear hint on move
+      clearPremove(); // Clear premove on actual move
       emit("game:move", { 
         lobbyId, 
         from, 
@@ -46,8 +66,31 @@ export default function GamePage({ emit }) {
       });
       return true;
     },
-    [emit, lobbyId, isBotGame]
+    [emit, lobbyId, isBotGame, setHintMove, clearPremove]
   );
+
+  // Execute Pmove when turn changes
+  useEffect(() => {
+    if (isMyTurn && premove) {
+      const { from, to, promotion } = premove;
+      
+      // We need a fresh chess instance to validate the premove against the NEW fen
+      const game = new Chess(fen);
+      try {
+        const move = game.move({ from, to, promotion: promotion || 'q' });
+        if (move) {
+          console.log('[Premove] Executing:', from, to);
+          handleMove(from, to, promotion);
+        } else {
+          console.warn('[Premove] Illegal move in new position:', from, to);
+          clearPremove();
+        }
+      } catch (err) {
+        console.error('[Premove] Error:', err);
+        clearPremove();
+      }
+    }
+  }, [isMyTurn, fen, premove, handleMove, clearPremove]);
 
   const handleResign = () => {
     if (window.confirm("Are you sure you want to resign?")) {
@@ -198,27 +241,54 @@ export default function GamePage({ emit }) {
 
           {/* Action Buttons */}
           {!isGameOver && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {!isBotGame && (
                 <button
                   onClick={handleDrawOffer}
-                  className="py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-sm font-medium hover:bg-white/10 hover:text-white transition-all"
+                  className="col-span-2 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-sm font-medium hover:bg-white/10 hover:text-white transition-all"
                 >
-                  🤝 Draw
+                  🤝 Offer Draw
                 </button>
               )}
+              
               <button
                 onClick={handleResign}
                 className="py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-all"
               >
                 🏳️ Resign
               </button>
+              
               <button
                 onClick={flipBoard}
                 className="py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-sm font-medium hover:bg-white/10 hover:text-white transition-all"
               >
                 🔄 Flip
               </button>
+
+              {isBotGame && (
+                <button
+                  onClick={handleGetHint}
+                  disabled={!isMyTurn || isGettingHint}
+                  className={`col-span-2 py-3 rounded-xl border transition-all flex items-center justify-center gap-2 font-medium ${
+                    isMyTurn && !isGettingHint
+                      ? "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20 shadow-lg shadow-blue-500/5"
+                      : "bg-gray-500/5 border-gray-500/10 text-gray-500 cursor-not-allowed"
+                  }`}
+                >
+                  {isGettingHint ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full"
+                      />
+                      Calculating...
+                    </>
+                  ) : (
+                    <>💡 Get Hint</>
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>

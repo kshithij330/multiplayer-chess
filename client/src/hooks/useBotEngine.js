@@ -29,20 +29,24 @@ export default function useBotEngine(emit) {
       // Tell server bot is thinking
       emit('game:bot_thinking', { lobbyId });
       
-      // Calculate move
-      stockfish.findMove(fen, botDifficulty, (move) => {
-        console.log('[BotEngine] Stockfish found move:', move);
-        
-        // Send move to server
-        // Note: we pass clientHandlesBot: true so the server doesn't try to calculate its own move
-        emit('game:move', {
-          lobbyId,
-          from: move.from,
-          to: move.to,
-          promotion: move.promotion,
-          clientHandlesBot: true
+      // Add a small natural delay so the move isn't instant
+      const thinkDelay = Math.random() * 1000 + 500; // 500ms to 1500ms
+
+      setTimeout(() => {
+        // Calculate move
+        stockfish.findMove(fen, botDifficulty, (move) => {
+          console.log('[BotEngine] Stockfish found move:', move);
+          
+          // Send move to server
+          emit('game:move', {
+            lobbyId,
+            from: move.from,
+            to: move.to,
+            promotion: move.promotion,
+            clientHandlesBot: true
+          });
         });
-      });
+      }, thinkDelay);
     }
   }, [fen, isBotGame, playerColor, isGameOver, lobbyId, botDifficulty, emit]);
 

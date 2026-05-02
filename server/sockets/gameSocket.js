@@ -93,7 +93,11 @@ module.exports = function (io) {
       const gameData = getGame(lobbyId);
       const game = chessInstances.get(lobbyId);
       if (!gameData || !game) return socket.emit("error", { code: "GAME_NOT_FOUND", message: "Game not found" });
-      if (!checkRateLimit(socket.id)) return socket.emit("error", { code: "RATE_LIMITED", message: "Too fast" });
+      
+      // Only rate limit human moves
+      if (!clientHandlesBot && !checkRateLimit(socket.id)) {
+        return socket.emit("error", { code: "RATE_LIMITED", message: "Too fast" });
+      }
 
       // Validate turn
       const currentTurn = game.turn();
